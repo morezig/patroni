@@ -26,7 +26,10 @@ RUN set -ex \
             | xargs apt-get install -y vim curl less jq locales haproxy sudo \
                             python3-etcd python3-kazoo python3-pip busybox \
                             net-tools iputils-ping --fix-missing \
-    && pip3 install dumb-init \
+    && apt install dumb-init -y \
+    && apt install pipx -y \
+    && pipx install dumb-init \
+    && pipx ensurepath \
 \
     # Cleanup all locales but en_US.UTF-8
     && find /usr/share/i18n/charmaps/ -type f ! -name UTF-8.gz -delete \
@@ -71,7 +74,7 @@ RUN set -ex \
     # Clean up all useless packages and some files
     && apt-get purge -y --allow-remove-essential python3-pip gzip bzip2 util-linux e2fsprogs \
                 libmagic1 bsdmainutils login ncurses-bin libmagic-mgc e2fslibs bsdutils \
-                exim4-config gnupg-agent dirmngr libpython2.7-stdlib libpython2.7-minimal \
+                exim4-config gnupg-agent dirmngr \
                 git make \
     && apt-get autoremove -y \
     && apt-get clean -y \
