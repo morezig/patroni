@@ -1,5 +1,8 @@
+# cluster name,同cluster內的patroni要設成相同，它在postgres.conf裡面的clutster_name
 scope: batman
-#namespace: /service/
+# patroni 會寫入組態值於到DCS裡, namespace是在DCS裡的儲存路徑, eg:使用etcdv3做為DCS時,可以用 etdctl get /service --prefix知道patroni於DCS裡寫了什麼值
+#namespace: /pg_service/
+# postgres的instance name, eg: pg0, pg1, pg2
 name: postgresql0
 
 restapi:
@@ -22,6 +25,7 @@ restapi:
 #  database: citus
 #  group: 0  # coordinator
 
+# 使用etcd v2做為dcs
 etcd:
   #Provide host to do the initial discovery of the cluster topology:
   host: 127.0.0.1:2379
@@ -36,6 +40,9 @@ etcd:
   #It is possible to change this behavior through by setting:
   #use_proxies: true
 
+# 使用etcd v3做為dcs
+etcd3:
+
 #raft:
 #  data_dir: .
 #  self_addr: 127.0.0.1:2222
@@ -43,6 +50,7 @@ etcd:
 #  - 127.0.0.1:2223
 #  - 127.0.0.1:2224
 
+# 用來生成postgres instance,會生成data dir, postgres.conf, pg_hba.conf
 bootstrap:
   # this section will be written into Etcd:/<namespace>/<scope>/config after initializing new cluster
   # and all other cluster members will use it as a `global configuration`
@@ -101,6 +109,7 @@ bootstrap:
         - createrole
         - createdb
 
+# 讓patroni知道如何連線postgres instance
 postgresql:
   listen: 127.0.0.1:5432
   connect_address: 127.0.0.1:5432
