@@ -1,8 +1,10 @@
 Patroni Introduction
-    環境介紹 (3台etcd + 3台patroni_pg + 1台ha_proxy)
-    install:
+    1.install:
         * debian: https://snapshooter.com/learn/postgresql/postgresql-cluster-patroni
         * rpm: https://docs.microfocus.com/doc/AMX/2022.05/HASQLPatroni
+        * docker: docker-compose up -d
+    2.環境介紹 (3台etcd + 3台patroni_pg + 1台ha_proxy)
+
 Patroni 介紹
     1.Common config yaml : 參考postgres0.yml.boyce
     2.Replication modes:
@@ -29,4 +31,3 @@ Patroni 介紹
         * patronictl switchover
         * patronictl failover
         * Add node: docker-compose -f docker-compose-addnode.yml up -d
-    5.Cont.
