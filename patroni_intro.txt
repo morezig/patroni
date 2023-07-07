@@ -2,11 +2,11 @@ Patroni Introduction
     1.install:
         * debian: https://snapshooter.com/learn/postgresql/postgresql-cluster-patroni
         * rpm: https://docs.microfocus.com/doc/AMX/2022.05/HASQLPatroni
-        * docker: docker-compose up -d
     2.環境介紹 (3台etcd + 3台patroni_pg + 1台ha_proxy)
+        * docker: docker-compose up -d
 
 Patroni 介紹
-    1.Common config yaml : 參考postgres0.yml.boyce
+    1.Common config yaml : 參考postgres0.yml.intro
     2.Replication modes:
         * Asynchronous mode: (default) 
             - controll by “maximum_lag_on_failover”) til loop_wait/2
