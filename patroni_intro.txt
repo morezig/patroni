@@ -6,6 +6,7 @@ Patroni Introduction
         * docker: docker-compose up -d
 
 Patroni 介紹
+    0.官方文件: https://patroni.readthedocs.io/en/latest/index.html
     1.Common config yaml : 參考postgres0.yml.intro
     2.Replication modes:
         * Asynchronous mode: (default) 
