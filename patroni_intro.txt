@@ -1,0 +1,27 @@
+Patroni Introduction
+    環境介紹 (3台etcd + 3台patroni_pg + 1台ha_proxy)
+Patroni 介紹
+    1.Common config yaml :
+    2.Replication modes:
+        * Asynchronous mode: (default) controll by “maximum_lag_on_failover”) til loop_wait/2
+        * Synchronous mode: 至少三結點確保寫入
+            - parameters下的 synchronous_commit: “on” and synchronous_standby_names: “*”
+            - synchronous_mode: 在數據對齊前不會promote節點，但仍可以手動切換
+            - synchronous_node_count: 同步的數據庫數量
+            - 性能，可用性，一致性:
+                性能 > 可用性 > 一致性: synchronous_mode: false (default)
+                可用性 > 一致性 > 性能: synchronous_mode: true, synchronous_node_count:1
+                一致性 > 可用性 > 性能: synchronous_mode: true, synchronous_node_count:2+
+    3.psql operation:
+        * psql -h localhost -p 5000 -U postgres -W
+        * create database demo;
+        * create table tbl1 (id serial, name varchar);
+        * insert into tbl1 values (1, 'john'),(2, ‘mary');
+        * truncate table tbl1;
+        * INSERT INTO tbl1 (id, name) VALUES (generate_series(1, 1000000),  repeat('A cool player. ', 2) || 'My number is ' || trunc(random()*1000000));
+    4.patronictl operation:
+        * patronictl topology
+        * patronictl switchover
+        * patronictl failover
+        * Add node: docker-compose -f docker-compose-addnode.yml up -d
+    5.Cont.

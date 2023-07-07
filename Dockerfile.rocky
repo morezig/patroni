@@ -1,0 +1,21 @@
+ARG ROCKY_VER=8
+ARG PG_MAJOR=15
+ARG COMPRESS=false
+ARG PGHOME=/home/postgres
+ARG PGDATA=$PGHOME/data
+ARG LC_ALL=C.UTF-8
+ARG LANG=C.UTF-8
+
+FROM rockylinux:$ROCKY_VER
+
+RUN dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-aarch64/pgdg-redhat-repo-latest.noarch.rpm \
+    && dnf update -y \
+    && dnf -qy module disable postgresql \
+    && dnf install -y postgresql15-server postgresql15-contrib
+
+ARG PGHOME
+ARG PGDATA
+ARG LC_ALL
+ARG LANG
+
+ENV ETCDVERSION=3.3.13 CONFDVERSION=0.16.0

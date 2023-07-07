@@ -1,9 +1,13 @@
+# cluster name,同cluster內的patroni要設成相同，它在postgres.conf裡面的clutster_name
 scope: batman
-#namespace: /service/
+# patroni 會寫入組態值於到DCS裡, namespace是在DCS裡的儲存路徑, eg:使用etcdv3做為DCS時,可以用 etdctl get /service --prefix知道patroni於DCS裡寫了什麼值
+namespace: /pg_service/
+# postgres的instance name, eg: pg0, pg1, pg2
 name: postgresql0
 
 restapi:
   listen: 127.0.0.1:8008
+  # 不能是loopback, 此位址存於etcd裡, 其它的patroni節點會從etcd裡取得此連線進行連接
   connect_address: 127.0.0.1:8008
 #  cafile: /etc/ssl/certs/ssl-cacert-snakeoil.pem
 #  certfile: /etc/ssl/certs/ssl-cert-snakeoil.pem
@@ -22,6 +26,7 @@ restapi:
 #  database: citus
 #  group: 0  # coordinator
 
+# 使用etcd v2做為dcs
 etcd:
   #Provide host to do the initial discovery of the cluster topology:
   host: 127.0.0.1:2379
@@ -36,6 +41,13 @@ etcd:
   #It is possible to change this behavior through by setting:
   #use_proxies: true
 
+# 使用etcd v3做為dcs
+# etcd3:
+#   hosts:
+#   - 10.252.90.217:2379
+#   - 10.252.90.218:2379
+#   - 10.252.90.219:2379
+
 #raft:
 #  data_dir: .
 #  self_addr: 127.0.0.1:2222
@@ -43,6 +55,7 @@ etcd:
 #  - 127.0.0.1:2223
 #  - 127.0.0.1:2224
 
+# 用來生成postgres instance,會生成data dir, postgres.conf, pg_hba.conf
 bootstrap:
   # this section will be written into Etcd:/<namespace>/<scope>/config after initializing new cluster
   # and all other cluster members will use it as a `global configuration`
@@ -58,6 +71,7 @@ bootstrap:
       #port: 1111
       #primary_slot_name: patroni
     postgresql:
+# 当 failover 发生后, old leader 需要成为 new leader 的replica, 设置 true， 就会通过 pg_rewind 来同步 offset, 否则会用 pg_basebackup 全量重建备库
       use_pg_rewind: true
       pg_hba:
       # For kerberos gss based connectivity (discard @.*$)
@@ -66,8 +80,13 @@ bootstrap:
       - host replication replicator 127.0.0.1/32 md5
       - host all all 0.0.0.0/0 md5
       #  - hostssl all all 0.0.0.0/0 md5
+      # 啟用replication slots
 #      use_slots: true
+      # 启用 pg 的同步赋值模式, 后面演示脑裂状态时会用到
       parameters:
+         # 啟用synchronous
+#        synchronous_commit: "on"
+#        synchronous_standby_names: "*"
 #        wal_level: hot_standby
 #        hot_standby: "on"
 #        max_connections: 100
@@ -101,6 +120,7 @@ bootstrap:
         - createrole
         - createdb
 
+# 讓patroni知道如何連線postgres instance
 postgresql:
   listen: 127.0.0.1:5432
   connect_address: 127.0.0.1:5432
