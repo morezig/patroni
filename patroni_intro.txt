@@ -4,10 +4,12 @@ Patroni Introduction
         * debian: https://snapshooter.com/learn/postgresql/postgresql-cluster-patroni
         * rpm: https://docs.microfocus.com/doc/AMX/2022.05/HASQLPatroni
 Patroni 介紹
-    1.Common config yaml :
+    1.Common config yaml : 參考postgres0.yml.boyce
     2.Replication modes:
-        * Asynchronous mode: (default) controll by “maximum_lag_on_failover”) til loop_wait/2
-        * Synchronous mode: 至少三結點確保寫入
+        * Asynchronous mode: (default) 
+            - controll by “maximum_lag_on_failover”) til loop_wait/2
+            - check_timeline -> 保證與主節點相同的timeline才會promote
+        * Synchronous mode: 至少三節點確保寫入
             - parameters下的 synchronous_commit: “on” and synchronous_standby_names: “*”
             - synchronous_mode: 在數據對齊前不會promote節點，但仍可以手動切換
             - synchronous_node_count: 同步的數據庫數量
