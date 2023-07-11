@@ -28,7 +28,10 @@ Patroni 介紹
         * insert into tbl1 values (1, 'john'),(2, ‘mary');
         * truncate table tbl1;
         * INSERT INTO tbl1 (id, name) VALUES (generate_series(1, 1000000), 'random number is ' || trunc(random()*1000000));
-    4.patronictl operation:
+    4.etcdctl / patronictl operation:
+        * etcdctl list
+        * etcdctl endpoint status --write-out=table
+        * patronictl list
         * patronictl topology
         * patronictl switchover
         * patronictl failover
