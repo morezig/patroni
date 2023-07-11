@@ -3,7 +3,8 @@ Patroni Introduction
         * debian: https://snapshooter.com/learn/postgresql/postgresql-cluster-patroni
         * rpm: https://docs.microfocus.com/doc/AMX/2022.05/HASQLPatroni
     2.環境介紹 (3台etcd + 3台patroni_pg + 1台ha_proxy)
-        * docker: docker-compose up -d
+        * BUILD: docker build -t patroni .
+        * RUN: docker-compose up -d
 
 Patroni 介紹
     0.官方文件: https://patroni.readthedocs.io/en/latest/index.html
