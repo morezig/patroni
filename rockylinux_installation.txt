@@ -170,10 +170,47 @@ tags:
 #sudo systemctl start patroni
 #sudo systemctl status patroni
 
-7.Install HAProxy
+7. Install PgBouncer
+#sudo dnf install -y pgbouncer
+
+7.1 Configure PgBouncer Authentication
+#psql -h patroni1 -p 5432 -U postgres
+postgres=# CREATE ROLE pgbouncer LOGIN with encrypted password "Type_Your_Password";
+
+postgres=# CREATE FUNCTION public.lookup (
+	INOUT p_user     name,
+	OUT   p_password text
+) RETURNS record
+LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog AS
+$$SELECT usename, passwd FROM pg_shadow WHERE usename = p_user$$;
+
+// copy encrypted password of pgbouncer from pg_shadow catalog table
+postgres=# select * from pg_shadow;
+
+// edit user list for pgbouncer
+#sudo vi /etc/pgbouncer/userlist.txt
+========================================================================
+"pgbouncer" "Type_Encrypted_Password"
+========================================================================
+
+7.2 configure
+#sudo cp -p /etc/pgbouncer/pgbouncer.ini /etc/pgbouncer/pgbouncer.ini.orig
+#sudo vi /etc/pgbouncer/pgbouncer.ini
+========================================================================
+* = host=192.168.1.119 port=5432 dbname=postgres
+listen_addr = *
+
+auth_user = pgbouncer
+auth_query = SELECT p_user, p_password FROM public.lookup($1)
+========================================================================
+
+7.3 start / stop 
+#sudo systemctl start pgbouncer
+
+8.Install HAProxy
 #sudo dnf install -y haproxy
 
-7.1 Configure HAProxy(注意組態裡的ip address對應)
+8.1 Configure HAProxy(注意組態裡的ip address對應)
 #sudo mv /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg.orig
 #sudo vi /etc/haproxy/haproxy.cfg
 ============================================
@@ -225,14 +262,14 @@ listen standby
     server patroni3 192.168.1.121:6432 maxconn 100 check port 8008
 ============================================
 
-7.2 
+8.2 
 #sudo systemctl start haproxy
 #sudo systemctl status haproxy
 
-8.Install Keepalived
+9.Install Keepalived
 #sudo dnf install -y keepalived
 
-8.1 Configure Keepalived
+9.1 Configure Keepalived
 #sudo vi /etc/sysctl.conf
 ==================================
 net.ipv4.ip_nonlocal_bind = 1
