@@ -155,7 +155,6 @@ tags:
     noloadbalance: false
     clonefrom: false
     nosync: false
-
 ===================================================
 
 6.2 Start Patroni Cluster
@@ -216,3 +215,64 @@ listen standby
     server patroni2 192.168.10.2:6432 maxconn 100 check port 8008
     server patroni3 192.168.10.3:6432 maxconn 100 check port 8008
 ============================================
+
+7.2 
+#sudo systemctl start haproxy
+#sudo systemctl status haproxy
+
+8.Install Keepalived
+#sudo dnf install -y keepalived
+
+8.1 Configure Keepalived
+#sudo nano /etc/sysctl.conf
+==================================
+net.ipv4.ip_nonlocal_bind = 1
+net.ipv4.ip_forward = 1
+==================================
+
+#sudo nano /etc/keepalived/keepalived.conf 
+==================================
+vrrp_script chk_haproxy {
+        script "pkill -0 haproxy"
+        interval 5
+        weight -4
+        fall 2
+        rise 1
+}
+
+vrrp_script chk_lb {
+        script "pkill -0 keepalived"
+        interval 1
+        weight 6
+        fall 2
+        rise 1
+}
+
+vrrp_script chk_servers {
+        script "echo 'GET /are-you-ok' | nc 127.0.0.1 7000 | grep -q '200 OK'"
+        interval 2
+        weight 2
+        fall 2
+        rise 2
+}
+
+vrrp_instance vrrp_1 {
+        interface enp0s3
+        state MASTER
+        virtual_router_id 51
+        priority 101
+        virtual_ipaddress_excluded {
+                192.168.10.200
+        }
+        track_interface {
+                enp0s3 weight -2
+        }
+        track_script {
+                chk_haproxy
+                chk_lb
+        }
+}
+==================================
+
+#sudo systemctl start keepalived
+#ip addr show enp0s3
