@@ -14,31 +14,40 @@ Patroni HA installation:
 //5000 HAProxy front-end listening port, required to establish connection to the back-end masater database server via pgbouncer port 6432.
 //5001 HAProxy front-end listening port, required to establish connection to the back-end replica database servers via pgbouncer port 6432
 //7000 HAProxy stats dashboard, required to access HAProxy web interface using HTTP.
-#sudo firewall-cmd --zone=public --add-port=5432/tcp --permanent
-#sudo firewall-cmd --zone=public --add-port=6432/tcp --permanent
-#sudo firewall-cmd --zone=public --add-port=8008/tcp --permanent
-#sudo firewall-cmd --zone=public --add-port=2379/tcp --permanent
-#sudo firewall-cmd --zone=public --add-port=2380/tcp --permanent
-#sudo firewall-cmd --permanent --zone=public --add-service=http
-#sudo firewall-cmd --zone=public --add-port=5000/tcp --permanent
-#sudo firewall-cmd --zone=public --add-port=5001/tcp --permanent
-#sudo firewall-cmd --zone=public --add-port=7000/tcp --permanent
-#sudo firewall-cmd --add-rich-rule='rule protocol value="vrrp" accept' --permanent
-#sudo firewall-cmd --reload
+sudo firewall-cmd --zone=public --add-port=5432/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=6432/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=8008/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=2379/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=2380/tcp --permanent
+sudo firewall-cmd --permanent --zone=public --add-service=http
+sudo firewall-cmd --zone=public --add-port=5000/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=5001/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=7000/tcp --permanent
+sudo firewall-cmd --add-rich-rule='rule protocol value="vrrp" accept' --permanent
+sudo firewall-cmd --reload
 
 3.Update Repository
 #sudo dnf install -y epel-release
 #sudo dnf install -y yum-utils
 
-4.Install CrystalDB
+4.Install Postgresql / CrystalDB
+Postgresql:
+sudo dnf --enablerepo=powertools install perl-IPC-Run -y
+sudo dnf -y install https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+sudo dnf config-manager --enable pgdg14
+sudo dnf module disable -y postgresql
+sudo dnf -y install postgresql14-server postgresql14 postgresql14-devel
+sudo ln -s /usr/pgsql-14/bin/* /usr/sbin/
+
+CrystalDB:
 //TBD
 
 5.Install etcd (預計三台，至少三台，三台都要執行項目5的各細項)
-#sudo nano /etc/yum.repos.d/etcd.repo
+#sudo vi /etc/yum.repos.d/etcd.repo
 =========================
 [etcd]
 name=PostgreSQL common RPMs for RHEL / Rocky $releasever - $basearch
-baseurl=http://ftp.postgresql.org/pub/repos/yum/common/pgdg-rhel9-extras/redhat/rhel-$releasever-$basearch
+baseurl=http://ftp.postgresql.org/pub/repos/yum/common/pgdg-rhel8-extras/redhat/rhel-$releasever-$basearch
 enabled=1
 gpgcheck=1
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-PGDG
@@ -52,15 +61,15 @@ repo_gpgcheck = 1
 #sudo mv /etc/etcd/etcd.conf /etc/etcd/etcd.conf.orig
 #sudo vi /etc/etcd/etcd.conf
 ==============================================
-ETCD_NAME=patroni?
-ETCD_DATA_DIR="/var/lib/etcd/patroni?"
-ETCD_LISTEN_PEER_URLS="http://192.168.10.?:2380"
-ETCD_LISTEN_CLIENT_URLS="http://192.168.10.?:2379"
-ETCD_INITIAL_ADVERTISE_PEER_URLS="http://192.168.10.?:2380"
-ETCD_INITIAL_CLUSTER="patroni1=http://192.168.10.1:2380,patroni2=http://192.168.10.2:2380,patroni3=http://192.168.10.3:2380"
+ETCD_NAME=patroni1
+ETCD_DATA_DIR="/var/lib/etcd/patroni1"
+ETCD_LISTEN_PEER_URLS="http://192.168.1.119:2380"
+ETCD_LISTEN_CLIENT_URLS="http://192.168.1.119:2379"
+ETCD_INITIAL_ADVERTISE_PEER_URLS="http://192.168.1.119:2380"
+ETCD_INITIAL_CLUSTER="patroni1=http://192.168.1.119:2380,patroni2=http://192.168.1.120:2380,patroni3=http://192.168.1.121:2380"
 ETCD_INITIAL_CLUSTER_STATE="new"
 ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster"
-ETCD_ADVERTISE_CLIENT_URLS="http://192.168.10.?:2379"
+ETCD_ADVERTISE_CLIENT_URLS="http://192.168.1.119:2379"
 ETCD_ENABLE_V2="true"
 ===============================================
 
@@ -70,9 +79,9 @@ ETCD_ENABLE_V2="true"
 export ETCDCTL_API="3"
 export PATRONI_ETCD_URL="http://127.0.0.1:2379"
 export PATRONI_SCOPE="pg_cluster"
-patroni1=192.168.10.1
-patroni2=192.168.10.2
-patroni3=192.168.10.3
+patroni1=192.168.1.119
+patroni2=192.168.1.120
+patroni3=192.168.1.121
 ENDPOINTS=$patroni1:2379,$patroni2:2379,$patroni3:2379
 =============================
 
@@ -96,11 +105,11 @@ namespace: /service/
 name: patroni1
 
 restapi:
-    listen: 192.168.10.1:8008
-    connect_address: 192.168.10.1:8008
+    listen: 192.168.11.119:8008
+    connect_address: 192.168.1.119:8008
 
 etcd:
-    hosts: 192.168.10.1:2379,192.168.10.2:2379,192.168.10.3:2379
+    hosts: 192.168.1.119:2379,192.168.1.120:2379,192.168.1.121:2379
 
 bootstrap:
   dcs:
@@ -119,9 +128,9 @@ bootstrap:
 
   pg_hba:
   - host replication replicator 127.0.0.1/32 md5
-  - host replication replicator 192.168.10.1/32 md5
-  - host replication replicator 192.168.10.2/32 md5
-  - host replication replicator 192.168.10.3/32 md5
+  - host replication replicator 192.168.1.119/32 md5
+  - host replication replicator 192.168.1.120/32 md5
+  - host replication replicator 192.168.1.121/32 md5
   - host all all 0.0.0.0/0 md5
 
   users:
@@ -132,8 +141,8 @@ bootstrap:
         - createdb
 
 postgresql:
-  listen: 192.168.10.1:5432
-  connect_address: 192.168.10.1:5432
+  listen: 192.168.1.119:5432
+  connect_address: 192.168.1.119:5432
   data_dir: /var/lib/pgsql/14/data
   bin_dir: /usr/pgsql-14/bin
   pgpass: /tmp/pgpass
@@ -166,7 +175,7 @@ tags:
 
 7.1 Configure HAProxy(注意組態裡的ip address對應)
 #sudo mv /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg.orig
-#sudo nano /etc/haproxy/haproxy.cfg
+#sudo vi /etc/haproxy/haproxy.cfg
 ============================================
 global
     log         127.0.0.1 local2
@@ -197,23 +206,23 @@ listen stats
     stats uri /
 
 listen primary
-    bind 192.168.10.200:5000
+    bind 192.168.1.119:5000
     option httpchk OPTIONS /master
     http-check expect status 200
     default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
-    server patroni1 192.168.10.1:6432 maxconn 100 check port 8008
-    server patroni2 192.168.10.2:6432 maxconn 100 check port 8008
-    server patroni3 192.168.10.3:6432 maxconn 100 check port 8008
+    server patroni1 192.168.1.119:6432 maxconn 100 check port 8008
+    server patroni2 192.168.1.120:6432 maxconn 100 check port 8008
+    server patroni3 192.168.1.121:6432 maxconn 100 check port 8008
 
 listen standby
-    bind 192.168.10.200:5001
+    bind 192.168.1.119:5001
     balance roundrobin
     option httpchk OPTIONS /replica
     http-check expect status 200
     default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
-    server patroni1 192.168.10.1:6432 maxconn 100 check port 8008
-    server patroni2 192.168.10.2:6432 maxconn 100 check port 8008
-    server patroni3 192.168.10.3:6432 maxconn 100 check port 8008
+    server patroni1 192.168.1.119:6432 maxconn 100 check port 8008
+    server patroni2 192.168.1.120:6432 maxconn 100 check port 8008
+    server patroni3 192.168.1.121:6432 maxconn 100 check port 8008
 ============================================
 
 7.2 
@@ -224,13 +233,13 @@ listen standby
 #sudo dnf install -y keepalived
 
 8.1 Configure Keepalived
-#sudo nano /etc/sysctl.conf
+#sudo vi /etc/sysctl.conf
 ==================================
 net.ipv4.ip_nonlocal_bind = 1
 net.ipv4.ip_forward = 1
 ==================================
 
-#sudo nano /etc/keepalived/keepalived.conf 
+#sudo vi /etc/keepalived/keepalived.conf 
 ==================================
 vrrp_script chk_haproxy {
         script "pkill -0 haproxy"
