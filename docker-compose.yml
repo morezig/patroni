@@ -79,6 +79,8 @@ services:
         networks: 
             demo:
                 ipv4_address: 172.20.0.6
+        ports:
+            - "8008:8008"
         env_file: docker/patroni.env
         hostname: patroni1
         container_name: demo-patroni1
