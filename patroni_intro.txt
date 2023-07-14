@@ -1,3 +1,8 @@
+// for mac/linux
+git clone git@github.com:morezig/patroni.git
+// for windows
+git clone git@github.com:morezig/patroni.git --config core.autocrlf=false
+
 Patroni Introduction
     1.install:
         * debian: https://snapshooter.com/learn/postgresql/postgresql-cluster-patroni
