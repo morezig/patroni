@@ -1,0 +1,324 @@
+Patroni HA installation:
+1.Disable SELINUX
+// Change SELINUX=enforcing to SELINUX=disabled
+#sudo vi /etc/selinux/config
+// reboot server
+#sudo shutdown -r now
+
+2.Configure Firewalld
+//5432 Postgres database standard port.
+//6432 PgBouncer standard port.
+//8008 patroni rest api port required by HAProxy to check the nodes status.
+//2379 etcd client port required by any client including patroni to communicate with etcd cluster.
+//2380 etcd peer urls port required by the etcd cluster members communication.
+//5000 HAProxy front-end listening port, required to establish connection to the back-end masater database server via pgbouncer port 6432.
+//5001 HAProxy front-end listening port, required to establish connection to the back-end replica database servers via pgbouncer port 6432
+//7000 HAProxy stats dashboard, required to access HAProxy web interface using HTTP.
+sudo firewall-cmd --zone=public --add-port=5432/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=6432/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=8008/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=2379/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=2380/tcp --permanent
+sudo firewall-cmd --permanent --zone=public --add-service=http
+sudo firewall-cmd --zone=public --add-port=5000/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=5001/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=7000/tcp --permanent
+sudo firewall-cmd --add-rich-rule='rule protocol value="vrrp" accept' --permanent
+sudo firewall-cmd --reload
+
+3.Update Repository
+#sudo dnf install -y epel-release
+#sudo dnf install -y yum-utils
+
+4.Install Postgresql / CrystalDB
+Postgresql:
+sudo dnf --enablerepo=powertools install perl-IPC-Run -y
+sudo dnf -y install https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+sudo dnf config-manager --enable pgdg14
+sudo dnf module disable -y postgresql
+sudo dnf -y install postgresql14-server postgresql14 postgresql14-devel
+sudo ln -s /usr/pgsql-14/bin/* /usr/sbin/
+
+CrystalDB:
+//TBD
+
+5.Install etcd (預計三台，至少三台，三台都要執行項目5的各細項)
+#sudo vi /etc/yum.repos.d/etcd.repo
+=========================
+[etcd]
+name=PostgreSQL common RPMs for RHEL / Rocky $releasever - $basearch
+baseurl=http://ftp.postgresql.org/pub/repos/yum/common/pgdg-rhel8-extras/redhat/rhel-$releasever-$basearch
+enabled=1
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-PGDG
+repo_gpgcheck = 1
+=========================
+
+#sudo dnf makecache
+#sudo dnf install -y etcd
+
+5.1 Configure etcd Cluster(注意組態裡的ip address對應)
+#sudo mv /etc/etcd/etcd.conf /etc/etcd/etcd.conf.orig
+#sudo vi /etc/etcd/etcd.conf
+==============================================
+ETCD_NAME=patroni1
+ETCD_DATA_DIR="/var/lib/etcd/patroni1"
+ETCD_LISTEN_PEER_URLS="http://192.168.1.119:2380"
+ETCD_LISTEN_CLIENT_URLS="http://192.168.1.119:2379"
+ETCD_INITIAL_ADVERTISE_PEER_URLS="http://192.168.1.119:2380"
+ETCD_INITIAL_CLUSTER="patroni1=http://192.168.1.119:2380,patroni2=http://192.168.1.120:2380,patroni3=http://192.168.1.121:2380"
+ETCD_INITIAL_CLUSTER_STATE="new"
+ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster"
+ETCD_ADVERTISE_CLIENT_URLS="http://192.168.1.119:2379"
+ETCD_ENABLE_V2="true"
+===============================================
+
+5.2 update bash profile for env vars(注意組態裡的ip address對應)
+#vi ~/.bash_profile
+============================
+export ETCDCTL_API="3"
+export PATRONI_ETCD_URL="http://127.0.0.1:2379"
+export PATRONI_SCOPE="pg_cluster"
+patroni1=192.168.1.119
+patroni2=192.168.1.120
+patroni3=192.168.1.121
+ENDPOINTS=$patroni1:2379,$patroni2:2379,$patroni3:2379
+=============================
+
+5.3 start etcd
+#sudo systemctl start etcd
+#source ~/.bash_profile
+#etcdctl member list
+#etcdctl endpoint status --write-out=table --endpoints=$ENDPOINTS
+
+6. install patroni (每一台pg server上)
+#sudo dnf -y install python3 python3-devel python3-pip gcc libpq-devel
+#sudo pip3 install --upgrade testresources --upgrade setuptools psycopg2 python-etcd
+#sudo dnf -y install patroni patroni-etcd watchdog
+
+6.1 configure patroni cluster (注意組態裡的ip address對應)
+#sudo mkdir -p /etc/patroni
+#sudo vi /etc/patroni/patroni.yml
+============================================
+scope: pg_cluster
+namespace: /service/
+name: patroni1
+
+restapi:
+    listen: 192.168.11.119:8008
+    connect_address: 192.168.1.119:8008
+
+etcd:
+    hosts: 192.168.1.119:2379,192.168.1.120:2379,192.168.1.121:2379
+
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    postgresql:
+      use_pg_rewind: true
+      use_slots: true
+      parameters:
+
+  initdb:
+  - encoding: UTF8
+  - data-checksums
+
+  pg_hba:
+  - host replication replicator 127.0.0.1/32 md5
+  - host replication replicator 192.168.1.119/32 md5
+  - host replication replicator 192.168.1.120/32 md5
+  - host replication replicator 192.168.1.121/32 md5
+  - host all all 0.0.0.0/0 md5
+
+  users:
+    admin:
+      password: admin
+      options:
+        - createrole
+        - createdb
+
+postgresql:
+  listen: 192.168.1.119:5432
+  connect_address: 192.168.1.119:5432
+  data_dir: /var/lib/pgsql/14/data
+  bin_dir: /usr/pgsql-14/bin
+  pgpass: /tmp/pgpass
+  authentication:
+    replication:
+      username: replicator
+      password: replicator
+    superuser:
+      username: postgres
+      password: postgres
+
+watchdog:
+  mode: required
+  device: /dev/watchdog
+  safety_margin: 5
+
+tags:
+    nofailover: false
+    noloadbalance: false
+    clonefrom: false
+    nosync: false
+===================================================
+
+6.2 Start Patroni Cluster
+#sudo systemctl start patroni
+#sudo systemctl status patroni
+
+7. Install PgBouncer
+#sudo dnf install -y pgbouncer
+
+7.1 Configure PgBouncer Authentication
+#psql -h patroni1 -p 5432 -U postgres
+postgres=# CREATE ROLE pgbouncer LOGIN with encrypted password "Type_Your_Password";
+
+postgres=# CREATE FUNCTION public.lookup (
+	INOUT p_user     name,
+	OUT   p_password text
+) RETURNS record
+LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog AS
+$$SELECT usename, passwd FROM pg_shadow WHERE usename = p_user$$;
+
+// copy encrypted password of pgbouncer from pg_shadow catalog table
+postgres=# select * from pg_shadow;
+
+// edit user list for pgbouncer
+#sudo vi /etc/pgbouncer/userlist.txt
+========================================================================
+"pgbouncer" "Type_Encrypted_Password"
+========================================================================
+
+7.2 configure
+#sudo cp -p /etc/pgbouncer/pgbouncer.ini /etc/pgbouncer/pgbouncer.ini.orig
+#sudo vi /etc/pgbouncer/pgbouncer.ini
+========================================================================
+* = host=192.168.1.119 port=5432 dbname=postgres
+listen_addr = *
+
+auth_user = pgbouncer
+auth_query = SELECT p_user, p_password FROM public.lookup($1)
+========================================================================
+
+7.3 start / stop 
+#sudo systemctl start pgbouncer
+
+8.Install HAProxy
+#sudo dnf install -y haproxy
+
+8.1 Configure HAProxy(注意組態裡的ip address對應)
+#sudo mv /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg.orig
+#sudo vi /etc/haproxy/haproxy.cfg
+============================================
+global
+    log         127.0.0.1 local2
+    chroot      /var/lib/haproxy
+    pidfile     /var/run/haproxy.pid
+    maxconn     1000
+    user        haproxy
+    group       haproxy
+    daemon
+    stats socket /var/lib/haproxy/stats
+
+defaults
+    mode                    tcp
+    log                     global
+    option                  tcplog
+    retries                 3
+    timeout queue           1m
+    timeout connect         10s
+    timeout client          1m
+    timeout server          1m
+    timeout check           10s
+    maxconn                 900
+
+listen stats
+    mode http
+    bind *:7000
+    stats enable
+    stats uri /
+
+listen primary
+    bind 192.168.1.119:5000
+    option httpchk OPTIONS /master
+    http-check expect status 200
+    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
+    server patroni1 192.168.1.119:6432 maxconn 100 check port 8008
+    server patroni2 192.168.1.120:6432 maxconn 100 check port 8008
+    server patroni3 192.168.1.121:6432 maxconn 100 check port 8008
+
+listen standby
+    bind 192.168.1.119:5001
+    balance roundrobin
+    option httpchk OPTIONS /replica
+    http-check expect status 200
+    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
+    server patroni1 192.168.1.119:6432 maxconn 100 check port 8008
+    server patroni2 192.168.1.120:6432 maxconn 100 check port 8008
+    server patroni3 192.168.1.121:6432 maxconn 100 check port 8008
+============================================
+
+8.2 
+#sudo systemctl start haproxy
+#sudo systemctl status haproxy
+
+9.Install Keepalived
+#sudo dnf install -y keepalived
+
+9.1 Configure Keepalived
+#sudo vi /etc/sysctl.conf
+==================================
+net.ipv4.ip_nonlocal_bind = 1
+net.ipv4.ip_forward = 1
+==================================
+
+#sudo vi /etc/keepalived/keepalived.conf 
+==================================
+vrrp_script chk_haproxy {
+        script "pkill -0 haproxy"
+        interval 5
+        weight -4
+        fall 2
+        rise 1
+}
+
+vrrp_script chk_lb {
+        script "pkill -0 keepalived"
+        interval 1
+        weight 6
+        fall 2
+        rise 1
+}
+
+vrrp_script chk_servers {
+        script "echo 'GET /are-you-ok' | nc 127.0.0.1 7000 | grep -q '200 OK'"
+        interval 2
+        weight 2
+        fall 2
+        rise 2
+}
+
+vrrp_instance vrrp_1 {
+        interface enp0s3
+        state MASTER
+        virtual_router_id 51
+        priority 101
+        virtual_ipaddress_excluded {
+                192.168.10.200
+        }
+        track_interface {
+                enp0s3 weight -2
+        }
+        track_script {
+                chk_haproxy
+                chk_lb
+        }
+}
+==================================
+
+#sudo systemctl start keepalived
+#ip addr show enp0s3
