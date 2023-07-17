@@ -31,16 +31,23 @@ sudo firewall-cmd --reload
 #sudo dnf install -y yum-utils
 
 4.Install Postgresql / CrystalDB
-Postgresql:
 sudo dnf --enablerepo=powertools install perl-IPC-Run -y
-sudo dnf -y install https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
-sudo dnf config-manager --enable pgdg14
-sudo dnf module disable -y postgresql
-sudo dnf -y install postgresql14-server postgresql14 postgresql14-devel
-sudo ln -s /usr/pgsql-14/bin/* /usr/sbin/
 
-CrystalDB:
-//TBD
+**Postgresql:
+sudo dnf -y install https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+sudo dnf config-manager --enable pgdg15
+sudo dnf module disable -y postgresql
+sudo dnf -y install postgresql15-server postgresql15 postgresql15-devel
+sudo ln -s /usr/pgsql-15/bin/* /usr/sbin/
+
+**CrystalDB:
+// Install the repository RPM:
+sudo dnf install -y https://download.crystaldb.com/yum/noarch/crystaldb-repo-1.0-1.el8.noarch.rpm
+sudo dnf -qy module disable postgresql
+sudo dnf install -y crystaldb15-server crystaldb15 crystaldb15-devel
+//or (CentOS Stream may not working with above command)
+//#sudo yum install https://download.crystaldb.com/yum/x86_64/crystaldb15-server-15.3-2PGDG.el8.x86_64.rpm
+
 
 5.Install etcd (預計三台，至少三台，三台都要執行項目5的各細項)
 #sudo vi /etc/yum.repos.d/etcd.repo
@@ -141,10 +148,16 @@ bootstrap:
         - createdb
 
 postgresql:
+  # for postgresql
   listen: 192.168.1.119:5432
   connect_address: 192.168.1.119:5432
   data_dir: /var/lib/pgsql/14/data
   bin_dir: /usr/pgsql-14/bin
+  # for crystaldb
+  #listen: 192.168.1.119:5555
+  #connect_address: 192.168.1.119:5555
+  #data_dir: /var/lib/crys/15/data
+  #bin_dir: /opt/CrystalDB/pgsql-15/bin
   pgpass: /tmp/pgpass
   authentication:
     replication:
