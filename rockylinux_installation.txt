@@ -14,6 +14,7 @@ Patroni HA installation:
 //5000 HAProxy front-end listening port, required to establish connection to the back-end masater database server via pgbouncer port 6432.
 //5001 HAProxy front-end listening port, required to establish connection to the back-end replica database servers via pgbouncer port 6432
 //7000 HAProxy stats dashboard, required to access HAProxy web interface using HTTP.
+sudo firewall-cmd --zone=public --add-port=5555/tcp --permanent
 sudo firewall-cmd --zone=public --add-port=5432/tcp --permanent
 sudo firewall-cmd --zone=public --add-port=6432/tcp --permanent
 sudo firewall-cmd --zone=public --add-port=8008/tcp --permanent
@@ -31,17 +32,18 @@ sudo firewall-cmd --reload
 #sudo dnf install -y yum-utils
 
 4.Install Postgresql / CrystalDB
-sudo dnf --enablerepo=powertools install perl-IPC-Run -y
-
 **Postgresql:
-sudo dnf -y install https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+sudo dnf --enablerepo=powertools install perl-IPC-Run -y
+sudo dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
 sudo dnf config-manager --enable pgdg15
 sudo dnf module disable -y postgresql
-sudo dnf -y install postgresql15-server postgresql15 postgresql15-devel
+sudo dnf install -y postgresql15-server postgresql15 postgresql15-devel
 sudo ln -s /usr/pgsql-15/bin/* /usr/sbin/
 
 **CrystalDB:
 // Install the repository RPM:
+sudo dnf --enablerepo=powertools install perl-IPC-Run -y
+sudo dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
 sudo dnf install -y https://download.crystaldb.com/yum/noarch/crystaldb-repo-1.0-1.el8.noarch.rpm
 sudo dnf -qy module disable postgresql
 sudo dnf install -y crystaldb15-server crystaldb15 crystaldb15-devel
@@ -51,10 +53,18 @@ sudo dnf install -y crystaldb15-server crystaldb15 crystaldb15-devel
 
 5.Install etcd (預計三台，至少三台，三台都要執行項目5的各細項)
 #sudo vi /etc/yum.repos.d/etcd.repo
-=========================
+=========================for rocky 8====================
 [etcd]
 name=PostgreSQL common RPMs for RHEL / Rocky $releasever - $basearch
 baseurl=http://ftp.postgresql.org/pub/repos/yum/common/pgdg-rhel8-extras/redhat/rhel-$releasever-$basearch
+enabled=1
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-PGDG
+repo_gpgcheck = 1
+=========================for rocky 9====================
+[etcd]
+name=PostgreSQL common RPMs for RHEL / Rocky $releasever - $basearch
+baseurl=http://ftp.postgresql.org/pub/repos/yum/common/pgdg-rhel9-extras/redhat/rhel-$releasever-$basearch
 enabled=1
 gpgcheck=1
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-PGDG
@@ -64,31 +74,36 @@ repo_gpgcheck = 1
 #sudo dnf makecache
 #sudo dnf install -y etcd
 
+/usr/bin/etcd --name="patroni1" --data-dir="/var/lib/etcd/default.etcd" --listen-peer-urls="http://192.168.1.121:2380" --advertise-client-urls="http://192.168.1.121:2379" --initial-cluster-token="etcd-cluster" --initial-cluster="patroni1=http://192.168.1.121:2380,patroni2=http://192.168.1.122:2380,patroni3=http://192.168.1.123:2380" --initial-cluster-state="new" --listen-client-urls="http://127.0.0.1:2379,http://192.168.1.121:2379"
+
 5.1 Configure etcd Cluster(注意組態裡的ip address對應)
 #sudo mv /etc/etcd/etcd.conf /etc/etcd/etcd.conf.orig
 #sudo vi /etc/etcd/etcd.conf
 ==============================================
-ETCD_NAME=patroni1
-ETCD_DATA_DIR="/var/lib/etcd/patroni1"
-ETCD_LISTEN_PEER_URLS="http://192.168.1.119:2380"
-ETCD_LISTEN_CLIENT_URLS="http://192.168.1.119:2379"
-ETCD_INITIAL_ADVERTISE_PEER_URLS="http://192.168.1.119:2380"
-ETCD_INITIAL_CLUSTER="patroni1=http://192.168.1.119:2380,patroni2=http://192.168.1.120:2380,patroni3=http://192.168.1.121:2380"
+# [member]
+ETCD_NAME=patroni
+ETCD_DATA_DIR="/var/lib/etcd/default.etcd"
+ETCD_LISTEN_PEER_URLS="http://192.168.1.121:2380"
+ETCD_LISTEN_CLIENT_URLS="http://192.168.1.121:2379"
+#[cluster]
+ETCD_INITIAL_ADVERTISE_PEER_URLS="http://192.168.1.121:2380"
+ETCD_INITIAL_CLUSTER="patroni1=http://192.168.1.121:2380,patroni2=http://192.168.1.122:2380,patroni3=http://192.168.1.123:2380"
 ETCD_INITIAL_CLUSTER_STATE="new"
 ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster"
-ETCD_ADVERTISE_CLIENT_URLS="http://192.168.1.119:2379"
+ETCD_ADVERTISE_CLIENT_URLS="http://192.168.1.121:2379"
 ETCD_ENABLE_V2="true"
 ===============================================
 
 5.2 update bash profile for env vars(注意組態裡的ip address對應)
 #vi ~/.bash_profile
 ============================
+export PATH:$PATH:/opt/CrystalDB/pgsql-15/bin
 export ETCDCTL_API="3"
 export PATRONI_ETCD_URL="http://127.0.0.1:2379"
 export PATRONI_SCOPE="pg_cluster"
-patroni1=192.168.1.119
-patroni2=192.168.1.120
-patroni3=192.168.1.121
+patroni1=192.168.1.121
+patroni2=192.168.1.122
+patroni3=192.168.1.123
 ENDPOINTS=$patroni1:2379,$patroni2:2379,$patroni3:2379
 =============================
 
@@ -99,9 +114,9 @@ ENDPOINTS=$patroni1:2379,$patroni2:2379,$patroni3:2379
 #etcdctl endpoint status --write-out=table --endpoints=$ENDPOINTS
 
 6. install patroni (每一台pg server上)
-#sudo dnf -y install python3 python3-devel python3-pip gcc libpq-devel
-#sudo pip3 install --upgrade testresources --upgrade setuptools psycopg2 python-etcd
-#sudo dnf -y install patroni patroni-etcd watchdog
+sudo dnf -y install python3 python3-devel python3-pip gcc libpq-devel
+sudo pip3 install --upgrade testresources --upgrade setuptools psycopg2 python-etcd
+sudo dnf -y install patroni patroni-etcd watchdog
 
 6.1 configure patroni cluster (注意組態裡的ip address對應)
 #sudo mkdir -p /etc/patroni
@@ -112,11 +127,11 @@ namespace: /service/
 name: patroni1
 
 restapi:
-    listen: 192.168.11.119:8008
-    connect_address: 192.168.1.119:8008
+    listen: 192.168.1.121:8008
+    connect_address: 192.168.1.121:8008
 
 etcd:
-    hosts: 192.168.1.119:2379,192.168.1.120:2379,192.168.1.121:2379
+    hosts: 192.168.1.121:2379,192.168.1.122:2379,192.168.1.123:2379
 
 bootstrap:
   dcs:
@@ -135,9 +150,9 @@ bootstrap:
 
   pg_hba:
   - host replication replicator 127.0.0.1/32 md5
-  - host replication replicator 192.168.1.119/32 md5
-  - host replication replicator 192.168.1.120/32 md5
   - host replication replicator 192.168.1.121/32 md5
+  - host replication replicator 192.168.1.122/32 md5
+  - host replication replicator 192.168.1.123/32 md5
   - host all all 0.0.0.0/0 md5
 
   users:
@@ -149,15 +164,15 @@ bootstrap:
 
 postgresql:
   # for postgresql
-  listen: 192.168.1.119:5432
-  connect_address: 192.168.1.119:5432
-  data_dir: /var/lib/pgsql/14/data
-  bin_dir: /usr/pgsql-14/bin
+  #listen: 192.168.1.119:5432
+  #connect_address: 192.168.1.119:5432
+  #data_dir: /var/lib/pgsql/14/data
+  #bin_dir: /usr/pgsql-14/bin
   # for crystaldb
-  #listen: 192.168.1.119:5555
-  #connect_address: 192.168.1.119:5555
-  #data_dir: /var/lib/crys/15/data
-  #bin_dir: /opt/CrystalDB/pgsql-15/bin
+  listen: 192.168.1.121:5555
+  connect_address: 192.168.1.121:5555
+  data_dir: /var/lib/crys/15/data
+  bin_dir: /opt/CrystalDB/pgsql-15/bin
   pgpass: /tmp/pgpass
   authentication:
     replication:
